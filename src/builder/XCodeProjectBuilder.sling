@@ -1,0 +1,157 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class is Builder:
+
+func getBuilderId as string:
+	return "xcode"
+
+func canBuild(dir as File) as bool
+{
+	assert dir
+	var it = dir.entries()
+	while it {
+		var f = it.next()
+		if not f:
+			break
+		if f.hasExtension("xcproj"):
+			return true
+	}
+	return false
+}
+
+func execute(ctx as MyContext, sourceDirectory as File, destinationDirectory as File) as bool
+{
+	var dir = assert sourceDirectory:
+		ctx.error("No source directory")
+	assert dir.isDirectory():
+		ctx.error("Source directory does not exist: `" .. ctx.fileToString(dir) .. "'")
+	ctx.debug("Using source directory: `" .. ctx.fileToString(dir) .. "'")
+	if dir.entry("Podfile").isFile() {
+		var pod = assert ctx.findCommand(ctx.getPodPath(), "pod")
+		ctx.info("Executing pod ..")
+		var errorBuffer as StringBuilder
+		if ctx.isDebug():
+			errorBuffer = new StringBuilder()
+		var pl = ProcessLauncher.forFile(pod)
+		pl.addToParams("install")
+		pl.setErrorBuffer(errorBuffer)
+		pl.setCwd(dir)
+		var r = pl.execute()
+		if errorBuffer && errorBuffer.count() > 0:
+			ctx.debug("pod execution error buffer: `" .. errorBuffer.toString() .. "'")
+		if r != 0 {
+			ctx.error("pod returned an error status: " .. String.forInteger(r))
+			return false
+		}
+		ctx.debug("pod succesful")
+	}
+	var xcodebuild = assert ctx.findCommand(ctx.getXcodebuildPath(), "xcodebuild")
+	ctx.info("Executing xcodebuild: `" .. ctx.fileToString(dir) .. "' ..")
+	var errorBuffer as StringBuilder
+	if ctx.isDebug():
+		errorBuffer = new StringBuilder()
+	var pl = ProcessLauncher.forFile(xcodebuild)
+	var sdkName = ctx.getTargetPlatform()
+	if String.isEmpty(sdkName) == false {
+		pl.addToParams("-sdk")
+		pl.addToParams(sdkName)
+	}
+	var targetName as string
+	if String.isEmpty(sdkName) || String.startsWith(sdkName, "iphone") {
+		targetName = "ios"
+	}
+	else {
+		targetName = "macos"
+	}
+	var libdirs = ctx.getLibdirs()
+	if Vector.getSize(libdirs) > 0 {
+		var sb = new StringBuilder()
+		foreach libdir in libdirs {
+			if libdir.isDirectory() {
+				if sb.count() > 0:
+					sb.append(" ")
+				sb.append(libdir.getPath())
+			}
+		}
+		pl.addToParams("FRAMEWORK_SEARCH_PATHS=\"" .. sb.toString() .. "\"")
+	}
+	pl.setErrorBuffer(errorBuffer)
+	pl.setCwd(dir)
+	var r = pl.execute()
+	if errorBuffer && errorBuffer.count() > 0 {
+		ctx.debug("xcodebuild execution error buffer: `" .. errorBuffer.toString() .. "'")
+	}
+	if r != 0 {
+		ctx.error("xcodebuild returned an error status: " .. String.forInteger(r))
+		return false
+	}
+	ctx.debug("xcodebuild succesful")
+	var destdir = destinationDirectory
+	if destdir {
+		destdir.createDirectoryRecursive()
+		var outputDir as File
+		if String.isEmpty(sdkName) {
+			outputDir = dir.entry("build").entry("Release-iphoneos")
+		}
+		else if sdkName == "macosx" {
+			outputDir = dir.entry("build").entry("Release")
+		}
+		else {
+			outputDir = dir.entry("build").entry("Release-" .. sdkName)
+		}
+		assert outputDir.isDirectory():
+			ctx.error("Output directory does not exist: `" .. ctx.fileToString(outputDir) .. "'")
+		var islib = false
+		var it = outputDir.entries()
+		while it {
+			var file = it.next()
+			if not file:
+				break
+			var dest = destdir.entry(file.baseName())
+			var fileName = file.getPath()
+			if String.endsWith(fileName, ".a") || String.endsWith(fileName, ".so"):
+				islib = true
+			ctx.debug("Copying `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "' ..")
+			assert file.copyFileTo(dest):
+				ctx.error("Failed to copy `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "'")
+		}
+		if islib {
+			var srcDir = dir.entry("src")
+			var it = srcDir.entries()
+			while it {
+				var file = it.next()
+				if not file:
+					break
+				if file.hasExtension("h") == false:
+					continue
+				var dest = destdir.entry(file.baseName())
+				ctx.debug("Copying `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "' ..")
+				assert file.copyFileTo(dest):
+					ctx.error("Failed to copy `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "'")
+			}
+		}
+	}
+	return true
+}

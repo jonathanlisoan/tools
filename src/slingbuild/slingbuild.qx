@@ -1,0 +1,139 @@
+
+#
+# This file is part of Eqela Tools
+# Copyright (c) 2018 Job and Esther Technologies Oy
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+
+use eqela:slingc:r314
+use eqela:builder:r3
+use eqela:jkop:20180720v2
+use eqela:jsh:r2
+
+### Common section
+
+main {
+	call ${1} $(1)
+}
+
+run {
+	call runNetCore $(*)
+}
+
+### .NET Core section
+
+runNetCore {
+	use eqela:dotnet:2.1.301
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=netcore -libdir=${eqela:jkop}/src -builder=${=expandCommand(eqela:builder)} -BdotnetPath=${eqela:dotnet} -output=build/${id}/netcore $(1) -quiet
+	eqela:dotnet build/${id}/netcore/${id}.dll
+}
+
+buildNetCore {
+	info
+	info "Building for .NET Core: ${1} .."
+	info
+	use eqela:dotnet:2.1.301
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=netcore -libdir=${eqela:jkop}/src -builder=${=expandCommand(eqela:builder)} -BdotnetPath=${eqela:dotnet} -output=build/${id}/netcore $(1)
+}
+
+buildNetCoreRelease {
+	info
+	info "Building .NET Core release for target ${target}
+	info
+	use eqela:dotnet:2.1.301
+	set id ${=getIdNameForPath(${1})}
+	setDefault version ${=getDateString()}
+	set outputdir build/${id}_${version}_${target}
+	eqela:slingc ${1} -target=netcore -libdir=${eqela:jkop}/src -builder=${=expandCommand(eqela:builder)} \
+		-BdotnetPath=${eqela:dotnet} -output=${outputdir} \
+		-Brelease=true -OstaticBuild=true -Btarget=${target}
+	eqela:jsh delete ${outputdir}/src
+	eqela:jsh delete ${outputdir}/sling.module
+	eqela:jsh ${pkgcmd} ${outputdir}
+}
+
+buildNetCoreReleaseLinux {
+	call buildNetCoreRelease ${1} target=linux-x64 pkgcmd=tardir
+}
+
+buildNetCoreReleaseMacos {
+	call buildNetCoreRelease ${1} target=osx-x64 pkgcmd=tardir
+}
+
+buildNetCoreReleaseWin64 {
+	call buildNetCoreRelease ${1} target=win-x64 pkgcmd=zipdir
+}
+
+buildNetCoreReleaseWin32 {
+	call buildNetCoreRelease ${1} target=win-x86 pkgcmd=zipdir
+}
+
+buildNetCoreReleaseAll {
+	call buildNetCoreReleaseLinux $(*)
+	call buildNetCoreReleaseMacos $(*)
+	call buildNetCoreReleaseWin64 $(*)
+	call buildNetCoreReleaseWin32 $(*)
+}
+
+buildEqelaPackage {
+	requireValue src
+	requireValue name
+	requireValue vendor
+	setDefault version ${=getDateString()}
+	info
+	info "Building Eqela Package: ${name} .."
+	info
+	use eqela:dotnet:2.1.301
+	eqela:jsh delete build/${name}-pkq
+	eqela:slingc -target=netcore ${src} -libdir=${eqela:jkop}/src -output=build/${name}-pkq -OstaticBuild=true
+	eqela:builder build/${name}-pkq/src -output=build/${name}-pkq/bin -dotnetPath=${eqela:dotnet}
+	eqela:jsh cpto build/${name}-pkq/${name}-${version} build/${name}-pkq/bin/*.dll
+	eqela:jsh makepkq build/${name}-pkq/${name}-${version} -vendor=${vendor} -name=${name} -version=${version} -platform=netcore21
+}
+
+### Web section
+
+buildWeb {
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=html5 -libdir=${eqela:jkop}/src -output=build/${id}/web $(1)
+}
+
+### Java section
+
+buildJava {
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=java7 -libdir=${eqela:jkop}/src -output=build/${id}/java -OstaticBuild=true -rebuild-all $(1)
+}
+
+### Android section
+
+buildAndroid {
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=android -libdir=${eqela:jkop}/src -output=build/${id}/android -OstaticBuild=true -rebuild-all $(1)
+}
+
+### iOS section
+
+buildIos {
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=iosoc -libdir=${eqela:jkop}/src -output=build/${id}/ios -OstaticBuild=true -rebuild-all $(1)
+}

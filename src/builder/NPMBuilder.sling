@@ -1,0 +1,81 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class is Builder:
+
+func getBuilderId as string:
+	return "npm"
+
+func canBuild(dir as File) as bool
+{
+	assert dir
+	if dir.entry("package.json").isFile() || dir.entry("gulpfile.js").isFile():
+		return true
+	return false
+}
+
+func execute(ctx as MyContext, sourceDirectory as File, destinationDirectory as File) as bool
+{
+	var dir = assert sourceDirectory:
+		ctx.error("No source directory")
+	assert dir.isDirectory():
+		ctx.error("Source directory does not exist: `" .. ctx.fileToString(dir) .. "'")
+	ctx.debug("Using source directory: `" .. ctx.fileToString(dir) .. "'")
+	var packagejson = dir.entry("package.json")
+	if packagejson.isFile() {
+		var npm = assert ctx.findCommand(ctx.getNpmPath(), "npm")
+		var pl = ProcessLauncher.forFile(npm)
+		pl.addToParams("install")
+		pl.setCwd(dir)
+		var r = pl.execute()
+		assert r == 0:
+			ctx.error("`npm install' returned error status " .. String.forInteger(r))
+	}
+	var gulpfile = dir.entry("gulpfile.js")
+	if gulpfile.isFile() {
+		var npx = assert ctx.findCommand(ctx.getNpxPath(), "npx")
+		var pl = ProcessLauncher.forFile(npx)
+		pl.addToParams("gulp")
+		pl.setCwd(dir)
+		var r = pl.execute()
+		assert r == 0:
+			ctx.error("`npx' returned error status " .. String.forInteger(r))
+	}
+	var destdir = destinationDirectory
+	if destdir {
+		destdir.createDirectoryRecursive()
+		var builddir = dir.entry("build")
+		var ee = builddir.entries()
+		while ee {
+			var file = ee.next()
+			if not file:
+				break
+			var dest = destdir.entry(file.baseName())
+			ctx.debug("Copying `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "' ..")
+			assert file.copyFileOrDirectoryTo(dest):
+				ctx.error("Failed to copy `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "'")
+		}
+	}
+	return true
+}

@@ -1,0 +1,95 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class:
+
+prop sourceFile as File
+prop executionDirectory as File
+prop properties as map<string,string>
+prop uses as vector<PackageDescription>
+prop functions as vector<ScriptFunction>
+
+func getSourceReference as SourceReference:
+	return SourceReference.forFile(sourceFile)
+
+func getSourcePath as string
+{
+	var v as string
+	if sourceFile:
+		v = sourceFile.getPath()
+	if String.isEmpty(v):
+		v = "none"
+	return v
+}
+
+func getSourceName as string
+{
+	var v as string
+	if sourceFile:
+		v = sourceFile.baseName()
+	if String.isEmpty(v):
+		v = "none"
+	return v
+}
+
+func setProperty(key as string, value as string)
+{
+	assert key
+	if not properties:
+		properties = new map<string,string>
+	properties[key] = value
+}
+
+func getProperty(key as string) as string
+{
+	assert properties
+	assert key
+	return Map.get(properties, key)
+}
+
+func addToUses(pkg as PackageDescription)
+{
+	assert pkg
+	if not uses:
+		uses = new vector<PackageDescription>
+	uses += pkg
+}
+
+func addToFunctions(function as ScriptFunction)
+{
+	assert function
+	if not functions:
+		functions = new vector<ScriptFunction>
+	functions += function
+}
+
+func getFunction(name as string) as ScriptFunction
+{
+	assert name
+	foreach function in functions {
+		if name == function.getName():
+			return function
+	}
+	return null
+}

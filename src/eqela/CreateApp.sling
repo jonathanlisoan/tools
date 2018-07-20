@@ -1,0 +1,71 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class is ConsoleApplicationMain:
+
+import capex.console
+
+prop api as LiveService
+
+func execute override as bool
+{
+	var id as string
+	var template as string
+	foreach arg in args {
+		if arg.isParameter() {
+			if not id {
+				id = arg.parameter
+			}
+			else if not template {
+				template = arg.parameter
+			}
+			else {
+				arg.reportAsUnsupported(ctx)
+				return false
+			}
+		}
+		else {
+			arg.reportAsUnsupported(ctx)
+			return false
+		}
+	}
+	assert String.isNotEmpty(id):
+		Log.error(ctx, "New project id was not supplied.")
+	assert String.isNotEmpty(template):
+		Log.error(ctx, "Template id was not supplied.")
+	var dd = File.forRelativePath(id, Environment.getCurrentDirectory())
+	Log.status(ctx, "Retrieving template `" .. template .. "' .. ")
+	var v = false
+	api.createWithTemplate(template, new DynamicMap(), dd, func(error as Error) {
+		Log.status(ctx, null)
+		if error {
+			Log.error(ctx, String.asString(error))
+		}
+		else {
+			Log.info(ctx, dd.getPath())
+			v = true
+		}
+	})
+	return v
+}

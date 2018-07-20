@@ -1,0 +1,147 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class is Builder:
+
+func getBuilderId as string:
+	return "netcore"
+
+func canBuild(dir as File) as bool
+{
+	assert dir
+	if CSProjUtil.findNetCoreProjectFile(dir):
+		return true
+	return false
+}
+
+func execute(ctx as MyContext, sourceDirectory as File, destinationDirectory as File) as bool
+{
+	var dir = assert sourceDirectory:
+		ctx.error("No source directory")
+	assert dir.isDirectory():
+		ctx.error("Source directory does not exist: `" .. ctx.fileToString(dir) .. "'")
+	ctx.debug("Using source directory: `" .. ctx.fileToString(dir) .. "'")
+	var dotnet = assert ctx.findCommand(ctx.getDotnetPath(), "dotnet")
+	if ctx.getUpdateDependencies() {
+		// Dotnet/Nuget continues to be a little bit braindead with regards to
+		// finding packages. It CANNOT prioritize local packages over cached versions.
+		// So we force it...
+		ctx.status("[dotnet] Clearing cached copies of local packages ..")
+		Nupkg.clearLocalPackagesFromNugetCache(ctx, dotnet, dir)
+		ctx.status("[dotnet] Updating package dependencies ..")
+		var pl = ProcessLauncher.forFile(dotnet)
+		pl.addToParams("restore")
+		pl.setCwd(dir)
+		var sb = new StringBuilder()
+		assert pl.executeToStringBuilder(sb) == 0 {
+			ctx.error("Failed to restore dotnet packages in: `" .. ctx.fileToString(dir) .. "'")
+			if ctx.getParanoid() == false:
+				ctx.info(sb.toString())
+		}
+		ctx.debug("`dotnet restore' successfully ended.")
+	}
+	var rplat as string
+	var isAppProject = CSProjUtil.isAppProject(dir)
+	if isAppProject {
+		ctx.status("[dotnet] Compiling ..")
+		var pl = ProcessLauncher.forFile(dotnet)
+		pl.addToParams("publish")
+		if ctx.getBuildRelease() {
+			pl.addToParams("-c")
+			pl.addToParams("Release")
+			rplat = ctx.getTargetPlatform()
+			if rplat {
+				pl.addToParams("-r")
+				pl.addToParams(rplat)
+			}
+		}
+		pl.setCwd(dir)
+		var sb = new StringBuilder()
+		assert pl.executeToStringBuilder(sb) == 0 {
+			ctx.error("Failed to build dotnet application in: `" .. ctx.fileToString(dir) .. "'")
+			if ctx.getParanoid() == false:
+				ctx.info(sb.toString())
+		}
+		ctx.debug("`dotnet build' successful")
+	}
+	else {
+		ctx.status("[dotnet] Compiling / packaging ..")
+		var pl = ProcessLauncher.forFile(dotnet)
+		pl.addToParams("pack")
+		if ctx.getBuildRelease() {
+			pl.addToParams("-c")
+			pl.addToParams("Release")
+		}
+		pl.setCwd(dir)
+		var sb = new StringBuilder()
+		assert pl.executeToStringBuilder(sb) == 0 {
+			ctx.error("Failed to build and pack dotnet library in: `" .. ctx.fileToString(dir) .. "'")
+			if ctx.getParanoid() == false:
+				ctx.info(sb.toString())
+		}
+		ctx.debug("`dotnet pack' successful")
+	}
+	var destdir = destinationDirectory
+	if destdir {
+		destdir.createDirectoryRecursive()
+		var builddir = dir.entry("build")
+		if not builddir.isDirectory():
+			builddir = dir.entry("bin").entry("Debug")
+		if not builddir.isDirectory():
+			builddir = dir.entry("bin").entry("Release")
+		var ee = builddir.entries()
+		if isAppProject {
+			while ee {
+				var file = ee.next()
+				if not file {
+					builddir = null
+					break
+				}
+				if file.isDirectory() {
+					builddir = file
+					break
+				}
+			}
+			assert builddir:
+				ctx.error("Failed to find build directory in `" .. ctx.fileToString(destdir) .. "'")
+			if rplat:
+				builddir = builddir.entry(rplat)
+			builddir = builddir.entry("publish")
+			ee = builddir.entries()
+		}
+		while ee {
+			var file = ee.next()
+			if not file:
+				break
+			if not file.isFile():
+				continue
+			var bn = file.baseName()
+			var dest = destdir.entry(bn)
+			ctx.debug("Copying `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "' ..")
+			assert file.copyFileTo(dest):
+				ctx.error("Failed to copy `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "'")
+		}
+	}
+	return true
+}

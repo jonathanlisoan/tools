@@ -1,0 +1,170 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class is JSONAPIClient:
+
+import capex.web
+import capex.util
+import sympathy
+
+prop sessionid as string
+prop lastError as Error
+
+ctor:
+	setApiUrl("http://api.eqela.com")
+
+func getStandardHeaders as KeyValueList<string,string>
+{
+	var hdrs = new KeyValueList<string,string>()
+	hdrs.add("x-sessionid", sessionid)
+	return hdrs
+}
+
+func login(address as string, password as string, callback as function<void, bool>)
+{
+	var params = new DynamicMap()
+	params.set("address", address)
+	params.set("password", password)
+	postWithStatus("createSessionWithCredentials", params, null, func(v as DynamicMap, error as Error) {
+		if error {
+			lastError = error
+			if callback:
+				callback(false)
+			return
+		}
+		sessionid = v.getString("sessionid")
+		if callback:
+			callback(true)
+	})
+}
+
+func logout(callback as function<void,bool>)
+{
+	var params = new DynamicMap()
+	postWithStatus("deleteUserSession", params, getStandardHeaders(), func(v as DynamicMap, error as Error) {
+		if error {
+			lastError = error
+			if callback:
+				callback(false)
+			return
+		}
+		sessionid = null
+		if callback:
+			callback(true)
+	})
+}
+
+class ProfileModel is JSONObject public
+{
+	func forJsonObject(o as object) static as this
+	{
+		var v = new this()
+		assert v.fromJsonObject(o)
+		return v
+	}
+
+	prop userid as string
+	prop firstname as string
+	prop lastname as string
+	prop organization as string
+
+	func toJsonObject as object
+	{
+		var v = new DynamicMap()
+		v.set("userid", userid)
+		v.set("firstname", firstname)
+		v.set("lastname", lastname)
+		v.set("organization", organization)
+		return v
+	}
+
+	func fromJsonObject(o as object) as bool
+	{
+		var v = assert o as DynamicMap
+		userid = v.getString("userid")
+		firstname = v.getString("firstname")
+		lastname = v.getString("lastname")
+		organization = v.getString("organization")
+		return true
+	}
+}
+
+func getProfile(callback as function<void,ProfileModel>)
+{
+	var params = new DynamicMap()
+	postWithStatus("getOwnProfile", params, getStandardHeaders(), func(v as DynamicMap, error as Error) {
+		if error {
+			lastError = error
+			if callback:
+				callback(null)
+			return
+		}
+		if callback:
+			callback(ProfileModel.forJsonObject(v))
+	})
+}
+
+func createWithTemplate(template as string, params as DynamicMap, destDir as File, callback as function<void,Error>)
+{
+	var ps = new DynamicMap()
+	ps.set("template", template)
+	ps.set("params", params)
+	var okcb = func(responseHeaders as KeyValueList<string,string>, body as buffer) {
+		var map = JSONParser.parse(String.forUTF8Buffer(body)) as DynamicMap
+		if map {
+			if handleAsError(map, callback):
+				return
+			onError(ServerError.internalError(), callback)
+			return
+		}
+		assert ZipReader.extractZipBufferToDirectory(body, destDir):
+			onError(ServerError.internalError(), callback)
+		callback(null)
+	}
+	var errcb = func(err as Error) {
+		callback(err)
+	}
+	doSendRequest("POST", getFullURL("createWithTemplate"), getStandardHeaders(), toUTF8Buffer(ps), okcb, errcb)
+}
+
+func translateFile(data as string, from as string, to as string, callback as function<void,string>)
+{
+	var ps = new DynamicMap()
+	ps.set("data", data)
+	ps.set("from", from)
+	ps.set("to", to)
+	postWithStatus("translateFile", ps, getStandardHeaders(), func(v as DynamicMap, error as Error) {
+		if error {
+			lastError = error
+			if callback:
+				callback(null)
+			return
+		}
+		var r = v.getString("data")
+		if not r:
+			lastError = ServerError.noData()
+		if callback:
+			callback(r)
+	})
+}

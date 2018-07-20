@@ -1,0 +1,67 @@
+
+/*
+ * This file is part of Eqela Tools
+ * Copyright (c) 2018 Job and Esther Technologies Oy
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+class is PackageRepository:
+
+func forDirectory(dir as File) static as this
+{
+	var v = new this()
+	v.setDirectory(dir)
+	return v
+}
+
+prop directory as File
+
+func getRepositoryName override as string
+{
+	if not directory:
+		return "null"
+	return "file://" .. directory.getPath()
+}
+
+func findInstaller(ctx as LoggingContext, desc as PackageDescription, platform as string) override as object
+{
+	assert desc
+	assert directory
+	var fn = desc.getVendor() .. "_" .. desc.getName() .. "_" .. desc.getVersion() .. "_" .. platform .. ".pkq"
+	var ff = directory.entry(fn)
+	if ff == null || ff.isFile() == false:
+		ff = directory.entry(desc.getVendor()).entry(fn)
+	assert ff && ff.isFile()
+	return ff
+}
+
+func getInstaller(ctx as LoggingContext, desc as PackageDescription, hint as object, listener as function<void,long,long>) override as File:
+	return hint as File
+
+func releaseInstaller(ctx as LoggingContext, file as File) override
+{
+	; // do nothing
+}
+
+func toUrl override as string
+{
+	assert directory
+	return "file://" .. directory.getPath()
+}
