@@ -308,7 +308,7 @@ func executeExecdll(args as vector<CommandLineArgument>) private as bool
 		Log.error(ctx, "Not a file: `" .. dll.getPath() .. "'")
 	var id = dll.getBasenameWithoutExtension()
 	var classname #used = id .. "." .. String.capitalize(id) .. "App"
-	Log.debug(ctx, "Looking for main class `" .. classname .. "' in DLL: `" .. dll.getPath() .. "'")
+	Log.debug(ctx, "Looking for main class `" .. classname .. "' or `App' in DLL: `" .. dll.getPath() .. "'")
 	var argumentsArray = new string[Vector.getSize(arguments)]
 	for(var n=0; n<Vector.getSize(arguments); n++) {
 		argumentsArray[n] = arguments[n]
@@ -532,7 +532,14 @@ func execute override as bool
 			api.setApiUrl(arg.value)
 		}
 		else if arg.isParameter() {
-			if String.endsWith(arg.parameter, ".qx") {
+			var dd = File.forPath(arg.parameter)
+			var bqx = dd.entry("build.qx")
+			if dd.isDirectory() && bqx.isFile() {
+				command = "script"
+				arg.parameter = bqx.getPath()
+				commandArgs += arg
+			}
+			else if String.endsWith(arg.parameter, ".qx") {
 				command = "script"
 				commandArgs += arg
 			}

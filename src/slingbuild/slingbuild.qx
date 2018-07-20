@@ -94,20 +94,38 @@ buildNetCoreReleaseAll {
 	call buildNetCoreReleaseWin32 $(*)
 }
 
-buildEqelaPackage {
+buildEqelaPackageDll {
 	requireValue src
+	requireValue output
+	info
+	info "Building Eqela package DLL: ${src} .."
+	info
+	use eqela:dotnet:2.1.301
+	eqela:jsh delete ${output}/tmp
+	eqela:slingc -target=netcore ${src} -libdir=${eqela:jkop}/src -output=${output}/tmp -OstaticBuild=true
+	eqela:builder ${output}/tmp/src -output=${output}/tmp/bin -dotnetPath=${eqela:dotnet}
+	eqela:jsh cpto ${output} ${output}/tmp/bin/*.dll
+	eqela:jsh delete ${output}/tmp
+}
+
+buildEqelaPackageFile {
+	requireValue files
 	requireValue name
 	requireValue vendor
 	setDefault version ${=getDateString()}
 	info
-	info "Building Eqela Package: ${name} .."
+	info "Building Eqela package file: ${files} .."
 	info
-	use eqela:dotnet:2.1.301
-	eqela:jsh delete build/${name}-pkq
-	eqela:slingc -target=netcore ${src} -libdir=${eqela:jkop}/src -output=build/${name}-pkq -OstaticBuild=true
-	eqela:builder build/${name}-pkq/src -output=build/${name}-pkq/bin -dotnetPath=${eqela:dotnet}
-	eqela:jsh cpto build/${name}-pkq/${name}-${version} build/${name}-pkq/bin/*.dll
-	eqela:jsh makepkq build/${name}-pkq/${name}-${version} -vendor=${vendor} -name=${name} -version=${version} -platform=netcore21
+	eqela:jsh makepkq ${files} -vendor=${vendor} -name=${name} -version=${version} -platform=netcore21
+}
+
+buildEqelaPackageFromSource {
+	requireValue src
+	requireValue name
+	requireValue vendor
+	eqela:jsh delete build/packagetmp
+	call buildEqelaPackageDll src=${src} output=build/packagetmp
+	call buildEqelaPackageFile files=build/packagetmp $(*)
 }
 
 ### Web section

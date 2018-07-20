@@ -51,7 +51,7 @@ buildSlingbuild {
 	info
 	info Building eqela:slingbuild ..
 	info
-	set version r2
+	set version r3
 	eqela:jsh delete build/slingbuild
 	eqela:jsh cpto build/slingbuild src/slingbuild/*.qx
 	eqela:jsh makepkq build/slingbuild -vendor=eqela -name=slingbuild -version=${version} -platform=all
