@@ -45,12 +45,18 @@ func execute override as bool
 {
 	var ctx = new MyContext()
 	ctx.setCtx(this.ctx)
+	var eqelaDebug = Environment.getVariable("EQELA_DEBUG")
+	if eqelaDebug && Boolean.asBoolean(eqelaDebug) == true:
+		ctx.setDebugMode(true)
 	var useBuilder as string
 	var src as File
 	var dest as File
 	foreach arg in args {
 		if arg.isParameter() && not src {
 			src = File.forPath(arg.parameter)
+		}
+		else if arg.isFlag("debug") {
+			ctx.setDebugMode(true)
 		}
 		else if arg.isOption("builder") {
 			useBuilder = arg.getStringValue()
@@ -93,6 +99,9 @@ func execute override as bool
 		}
 		else if arg.isOption("androidSdkPath") {
 			ctx.setAndroidSdkPath(File.forPath(arg.getStringValue()))
+		}
+		else if arg.isOption("androidStudioPath") {
+			ctx.setAndroidStudioPath(File.forPath(arg.getStringValue()))
 		}
 		else if arg.isOption("libdir") {
 			ctx.addToLibdirs(File.forPath(arg.getStringValue()))

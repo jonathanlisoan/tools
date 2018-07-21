@@ -22,9 +22,9 @@
 # SOFTWARE.
 #
 
-use eqela:slingc:r314
-use eqela:builder:r3
-use eqela:jkop:20180720v2
+use eqela:slingc:r315
+use eqela:builder:r4
+use eqela:jkop:20180721
 use eqela:jsh:r2
 
 ### Common section
@@ -53,6 +53,15 @@ buildNetCore {
 	use eqela:dotnet:2.1.301
 	set id ${=getIdNameForPath(${1})}
 	eqela:slingc ${1} -target=netcore -libdir=${eqela:jkop}/src -builder=${=expandCommand(eqela:builder)} -BdotnetPath=${eqela:dotnet} -output=build/${id}/netcore $(1)
+}
+
+buildNetCoreStatic {
+	info
+	info "Building for .NET Core (static): ${1} .."
+	info
+	use eqela:dotnet:2.1.301
+	set id ${=getIdNameForPath(${1})}
+	eqela:slingc ${1} -target=netcore -libdir=${eqela:jkop}/src -builder=${=expandCommand(eqela:builder)} -BdotnetPath=${eqela:dotnet} -OstaticBuild=true -output=build/${id}/netcore $(1)
 }
 
 buildNetCoreRelease {

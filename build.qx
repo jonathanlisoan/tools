@@ -39,7 +39,7 @@ buildBuilder {
 	info
 	info Building eqela:builder ..
 	info
-	set version r3
+	set version r4
 	eqela:jsh delete build/builder
 	eqela:slingc -target=netcore src/builder -libdir=${eqela:jkop}/src -output=build/builder -OstaticBuild=true
 	eqela:builder build/builder/src -output=build/builder/bin -dotnetPath=${eqela:dotnet}
@@ -51,7 +51,7 @@ buildSlingbuild {
 	info
 	info Building eqela:slingbuild ..
 	info
-	set version r3
+	set version r4
 	eqela:jsh delete build/slingbuild
 	eqela:jsh cpto build/slingbuild src/slingbuild/*.qx
 	eqela:jsh makepkq build/slingbuild -vendor=eqela -name=slingbuild -version=${version} -platform=all

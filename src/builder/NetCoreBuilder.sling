@@ -134,12 +134,10 @@ func execute(ctx as MyContext, sourceDirectory as File, destinationDirectory as 
 			var file = ee.next()
 			if not file:
 				break
-			if not file.isFile():
-				continue
 			var bn = file.baseName()
 			var dest = destdir.entry(bn)
 			ctx.debug("Copying `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "' ..")
-			assert file.copyFileTo(dest):
+			assert file.copyFileOrDirectoryTo(dest):
 				ctx.error("Failed to copy `" .. ctx.fileToString(file) .. "' -> `" .. ctx.fileToString(dest) .. "'")
 		}
 	}

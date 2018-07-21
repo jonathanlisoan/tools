@@ -49,31 +49,35 @@ func findGradleExecutable(ctx as MyContext) private as File
 	var v = ctx.tryFindCommand(ctx.getGradlePath(), "gradle")
 	if v:
 		return v
-	var androidStudioDir as File
-	if OS.isMacOS() {
-		androidStudioDir = File.forPath("/Applications/Android Studio.app/Contents/gradle")
-	}
-	else if OS.isWindows() {
-		IFDEF("target_dotnet4cs") {
-			androidStudioDir = File.forPath(lang "cs" string {{{ System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles) }}}).entry("Android").entry("Android Studio").entry("gradle")
-			if(androidStudioDir.isDirectory() == false) {
-				androidStudioDir = File.forPath(lang "cs" string {{{ System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86) }}}).entry("Android").entry("Android Studio").entry("gradle")
+	var androidStudioDir = ctx.getAndroidStudioPath()
+	if androidStudioDir == null {
+		if OS.isMacOS() {
+			androidStudioDir = File.forPath("/Applications/Android Studio.app/Contents/gradle")
+		}
+		else if OS.isWindows() {
+			IFDEF("target_dotnet4cs") {
+				androidStudioDir = File.forPath(lang "cs" string {{{ System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles) }}}).entry("Android").entry("Android Studio").entry("gradle")
+				if(androidStudioDir.isDirectory() == false) {
+					androidStudioDir = File.forPath(lang "cs" string {{{ System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86) }}}).entry("Android").entry("Android Studio").entry("gradle")
+				}
+				if(androidStudioDir.isDirectory() == false) {
+					androidStudioDir = File.forPath("C:\\Program Files\\Android\\Android Studio\\gradle")
+				}
+				if(androidStudioDir.isDirectory() == false) {
+					androidStudioDir = File.forPath("C:\\Program Files (x86)\\Android\\Android Studio\\gradle")
+				}
+				if(androidStudioDir.isDirectory() == false) {
+					androidStudioDir = null
+				}
 			}
-			if(androidStudioDir.isDirectory() == false) {
-				androidStudioDir = File.forPath("C:\\Program Files\\Android\\Android Studio\\gradle")
-			}
-			if(androidStudioDir.isDirectory() == false) {
-				androidStudioDir = File.forPath("C:\\Program Files (x86)\\Android\\Android Studio\\gradle")
-			}
-			if(androidStudioDir.isDirectory() == false) {
-				androidStudioDir = null
+			ELSE {
+				;
 			}
 		}
-		ELSE {
-			;
-		}
 	}
-	if androidStudioDir && androidStudioDir.isDirectory() {
+	if androidStudioDir {
+		assert androidStudioDir.isDirectory():
+			ctx.error("Not a directory: `" .. ctx.fileToString(androidStudioDir) .. "'")
 		var it = androidStudioDir.entries()
 		while it {
 			var g = it.next()
@@ -87,6 +91,24 @@ func findGradleExecutable(ctx as MyContext) private as File
 				if v:
 					return v
 				ctx.debug("Not a valid Gradle path: `" .. ctx.fileToString(g) .. "'")
+			}
+		}
+		var gradlesub = androidStudioDir.entry("gradle")
+		if gradlesub.isDirectory() {
+			var i2 = gradlesub.entries()
+			while i2 {
+				var g = i2.next()
+				if g == null:
+					break
+				if g.isDirectory() == false:
+					continue
+				var bn = g.baseName()
+				if String.startsWith(bn, "gradle-") {
+					var v = findGradleExecutableForPath(g.getPath())
+					if v:
+						return v
+					ctx.debug("Not a valid Gradle path: `" .. ctx.fileToString(g) .. "'")
+				}
 			}
 		}
 	}
@@ -124,17 +146,34 @@ func execute(ctx as MyContext, sourceDirectory as File, destinationDirectory as 
 	else {
 		args = [ "assembleDebug", "-x", "lint" ]
 	}
-	var pl = ProcessLauncher.forFile(gradleExe, args)
+	var pl as ProcessLauncher
+	if OS.isLinux() || OS.isMacOS() {
+		// The Android SDK ships the gradle script without the
+		// execute permission set. If this is the case, we need
+		// to manually execute the shell for it.
+		if gradleExe.isExecutable() == false {
+			pl = ProcessLauncher.forCommand("sh")
+			pl.addToParams(gradleExe.getPath())
+		}
+	}
+	if not pl:
+		pl = ProcessLauncher.forFile(gradleExe)
+	foreach arg as string in args:
+		pl.addToParams(arg)
 	pl.setErrorBuffer(errorBuffer)
 	pl.setCwd(dir)
 	pl.setEnvVariable("ANDROID_HOME", sdkPath.getPath())
+	ctx.debug("Executing gradle command: `" .. pl.toString() .. "'")
 	var r = pl.execute()
-	if errorBuffer && errorBuffer.count() > 0 {
-		ctx.debug("Gradle execution error buffer: `" .. errorBuffer.toString() .. "'")
-	}
 	if r != 0 {
 		ctx.error("Gradle build returned an error status: " .. String.forInteger(r))
+		if errorBuffer && errorBuffer.count() > 0:
+			ctx.error("Gradle execution error buffer: `" .. errorBuffer.toString() .. "'")
 		return false
+	}
+	else {
+		if errorBuffer && errorBuffer.count() > 0:
+			ctx.debug("Gradle execution error buffer: `" .. errorBuffer.toString() .. "'")
 	}
 	ctx.debug("Gradle build succesful")
 	var destdir = destinationDirectory

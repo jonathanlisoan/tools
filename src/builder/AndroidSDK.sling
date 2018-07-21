@@ -103,7 +103,7 @@ func findAndroidSDKDirectory(ctx as MyContext) static as File
 				return sdkDir
 		}
 	}
-	ctx.error("Unable to find Android SDK. Configure with path name `androidsdk'.")
+	ctx.error("Unable to find Android SDK. Configure with option `androidSdkPath'.")
 	return null
 }
 

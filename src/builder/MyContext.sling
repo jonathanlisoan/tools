@@ -24,7 +24,9 @@
 
 class:
 
-prop ctx as LoggingContext
+import capex.console
+
+prop ctx as ConsoleApplicationContext
 prop paranoid = false
 prop paths = new map<string,string>
 prop options = new map<string,string>
@@ -37,10 +39,21 @@ prop npxPath as File
 prop podPath as File
 prop xcodebuildPath as File
 prop androidSdkPath as File
+prop androidStudioPath as File
 prop buildRelease = false
 prop targetPlatform as string
 prop updateDependencies = true
 prop libdirs as vector<File>
+
+func setDebugMode(v as bool)
+{
+	if v {
+		ctx.setEnableDebugMessages(true)
+	}
+	else {
+		ctx.setEnableDebugMessages(false)
+	}
+}
 
 func addToLibdirs(dir as File)
 {
